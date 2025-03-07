@@ -45,6 +45,8 @@ export default function AdminPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false)
+  // Add a new state to track matched pairs
+  const [matchedPairIds, setMatchedPairIds] = useState<string[]>([])
 
   useEffect(() => {
     if (!loading && !user) {
@@ -73,6 +75,10 @@ export default function AdminPage() {
         if (matchesSnap.exists()) {
           const matchesData = matchesSnap.data().matches || []
           setMatches(matchesData)
+
+          // Extract all matched pair IDs
+          const pairIds = matchesData.map((match: any) => match.pairId)
+          setMatchedPairIds(pairIds)
         }
       } catch (error) {
         console.error("Error fetching data:", error)
@@ -279,14 +285,31 @@ export default function AdminPage() {
                       <TableRow className="hover:bg-gold-dark/5 border-b-gold-dark/20">
                         <TableHead className="text-gold-light">Number</TableHead>
                         <TableHead className="text-gold-light">Name</TableHead>
+                        <TableHead className="text-gold-light">Status</TableHead>
                         <TableHead className="text-right text-gold-light">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pairs.map((pair) => (
-                        <TableRow key={pair.id} className="hover:bg-gold-dark/5 border-b-gold-dark/20">
+                        <TableRow
+                          key={pair.id}
+                          className={`hover:bg-gold-dark/5 border-b-gold-dark/20 ${
+                            matchedPairIds.includes(pair.id) ? "bg-gold-dark/5" : ""
+                          }`}
+                        >
                           <TableCell className="font-medium">{pair.number}</TableCell>
                           <TableCell>{pair.name}</TableCell>
+                          <TableCell>
+                            {matchedPairIds.includes(pair.id) ? (
+                              <span className="text-xs px-2 py-1 rounded-full bg-gold-dark/10 text-gold-light">
+                                Matched
+                              </span>
+                            ) : (
+                              <span className="text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
+                                Available
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
                             <Button
                               variant="ghost"

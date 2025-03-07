@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, limit, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore"
+import { collection, getDocs, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore"
 import confetti from "canvas-confetti"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -82,38 +82,63 @@ export default function ViewPage() {
     }
   }, [user, loaded])
 
-  useEffect(() => {
-    const fetchRandomPair = async () => {
-      if (!user || alreadyMatched) {
-        setLoaded(true)
-        return
+  const fetchRandomPair = async () => {
+    if (!user || alreadyMatched) {
+      setLoaded(true)
+      return
+    }
+
+    try {
+      // First, get all matched pairs to exclude them
+      const matchesRef = doc(db, "matches", "all")
+      const matchesSnap = await getDoc(matchesRef)
+
+      let matchedPairIds: string[] = []
+
+      if (matchesSnap.exists()) {
+        const matches = matchesSnap.data().matches || []
+        // Extract all pairIds that have been matched
+        matchedPairIds = matches.map((match: any) => match.pairId)
       }
 
-      try {
-        const pairsRef = collection(db, "pairs")
-        const q = query(pairsRef, limit(10))
-        const querySnapshot = await getDocs(q)
+      // Get all pairs
+      const pairsRef = collection(db, "pairs")
+      const querySnapshot = await getDocs(pairsRef)
 
-        if (!querySnapshot.empty) {
-          const pairs = querySnapshot.docs.map((doc) => ({
+      if (!querySnapshot.empty) {
+        // Filter out pairs that have already been matched
+        const availablePairs = querySnapshot.docs
+          .map((doc) => ({
             id: doc.id,
             ...(doc.data() as { number: string; name: string }),
           }))
+          .filter((pair) => !matchedPairIds.includes(pair.id))
 
-          // Select a random pair
-          const randomPair = pairs[Math.floor(Math.random() * pairs.length)]
-          setCurrentPair(randomPair)
+        if (availablePairs.length === 0) {
+          // No available pairs left
+          setLoaded(true)
+          return
         }
 
-        setLoaded(true)
-      } catch (error) {
-        console.error("Error fetching pairs:", error)
-        setLoaded(true)
+        // Select a random pair from available pairs
+        const randomPair = availablePairs[Math.floor(Math.random() * availablePairs.length)]
+        setCurrentPair(randomPair)
       }
+
+      setLoaded(true)
+    } catch (error) {
+      console.error("Error fetching pairs:", error)
+      setLoaded(true)
+    }
+  }
+
+  useEffect(() => {
+    const fetchRandomPairWrapper = async () => {
+      await fetchRandomPair()
     }
 
     if (user && !loaded && !alreadyMatched) {
-      fetchRandomPair()
+      fetchRandomPairWrapper()
     }
   }, [user, loaded, alreadyMatched])
 
@@ -298,9 +323,13 @@ export default function ViewPage() {
           </Card>
         </div>
       ) : (
-        <div className="text-center">
-          <p className="text-lg mb-4">No number-name pairs available.</p>
-          <p>Please ask the admin to add some pairs.</p>
+        <div className="text-center w-full max-w-md">
+          <Card className="p-8 text-center shadow-lg border border-gold-dark/30">
+            <AlertCircle className="h-12 w-12 text-gold-light mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2 text-gold-light">No Available Matches</h2>
+            <p className="text-muted-foreground mb-4">All number-name pairs have already been matched with users.</p>
+            <p className="text-sm text-muted-foreground">Please ask the admin to add more pairs or check back later.</p>
+          </Card>
         </div>
       )}
     </div>
